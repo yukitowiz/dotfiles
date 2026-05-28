@@ -108,94 +108,113 @@ tasks:
         platforms: [windows]
 
   office:install:
-    desc: Clone or update office-only dotfiles repository
+    desc: Install or update office-only SSH config from a separate repository
     cmds:
       - cmd: |
           if [ -z "${DOTFILES_OFFICE_REPO:-}" ]; then
             echo "DOTFILES_OFFICE_REPO is not set."
-            echo ""
+            echo
             echo "Example:"
-            echo "  export DOTFILES_OFFICE_REPO=git@github.com-office:<ORG>/dotfiles-office.git"
+            echo "  export DOTFILES_OFFICE_REPO=git@githubw.com:<ORG>/dotfiles-office.git"
             exit 1
           fi
 
-          office_dir="${DOTFILES_OFFICE_DIR:-$HOME/.local/share/dotfiles-office}"
+          OFFICE_CACHE_DIR="$HOME/.local/share/dotfiles-office"
+          OFFICE_SSH_CONFIG_SRC="ssh/office.conf"
+          OFFICE_SSH_CONFIG_DEST="$HOME/.ssh/config.d/office.conf"
 
-          mkdir -p "$(dirname "$office_dir")"
-
-          if [ -d "$office_dir/.git" ]; then
-            git -C "$office_dir" pull --ff-only
-          else
-            git clone --depth 1 "$DOTFILES_OFFICE_REPO" "$office_dir"
-          fi
-
+          mkdir -p "$HOME/.ssh/config.d"
           mkdir -p "$HOME/.ssh/controlmasters"
 
-          chmod 700 "$HOME/.ssh" 2>/dev/null || true
-          chmod 700 "$HOME/.ssh/controlmasters" 2>/dev/null || true
-          chmod -R go-rwx "$office_dir" 2>/dev/null || true
+          if [ -d "$OFFICE_CACHE_DIR/.git" ]; then
+            git -C "$OFFICE_CACHE_DIR" fetch --prune
+            git -C "$OFFICE_CACHE_DIR" pull --ff-only
+          else
+            git clone --filter=blob:none --sparse "$DOTFILES_OFFICE_REPO" "$OFFICE_CACHE_DIR"
+            git -C "$OFFICE_CACHE_DIR" sparse-checkout set "$OFFICE_SSH_CONFIG_SRC"
+          fi
 
-          echo "Office dotfiles installed at: $office_dir"
+          cp "$OFFICE_CACHE_DIR/$OFFICE_SSH_CONFIG_SRC" "$OFFICE_SSH_CONFIG_DEST"
+
+          chmod 700 "$HOME/.ssh" || true
+          chmod 700 "$HOME/.ssh/config.d" || true
+          chmod 700 "$HOME/.ssh/controlmasters" || true
+          chmod 600 "$OFFICE_SSH_CONFIG_DEST" || true
+
+          echo "Installed: $OFFICE_SSH_CONFIG_DEST"
         platforms: [linux, darwin]
 
       - cmd: |
-          powershell -NoProfile -ExecutionPolicy Bypass -Command "
-            if (-not $env:DOTFILES_OFFICE_REPO) {
-              Write-Host 'DOTFILES_OFFICE_REPO is not set.'
-              Write-Host ''
-              Write-Host 'Example:'
-              Write-Host '  $env:DOTFILES_OFFICE_REPO = \"git@github.com-office:<ORG>/dotfiles-office.git\"'
-              exit 1
-            }
+          if (-not $env:DOTFILES_OFFICE_REPO) {
+            Write-Host "DOTFILES_OFFICE_REPO is not set."
+            Write-Host ""
+            Write-Host "Example:"
+            Write-Host '$env:DOTFILES_OFFICE_REPO = "git@githubw.com:<ORG>/dotfiles-office.git"'
+            exit 1
+          }
 
-            $officeDir = if ($env:DOTFILES_OFFICE_DIR) {
-              $env:DOTFILES_OFFICE_DIR
-            } else {
-              Join-Path $env:USERPROFILE '.local\share\dotfiles-office'
-            }
+          $OfficeCacheDir = Join-Path $HOME ".local/share/dotfiles-office"
+          $OfficeSshConfigSrc = "ssh/office.conf"
+          $OfficeSshConfigDestDir = Join-Path $HOME ".ssh/config.d"
+          $OfficeSshConfigDest = Join-Path $OfficeSshConfigDestDir "office.conf"
 
-            $parent = Split-Path -Parent $officeDir
-            New-Item -ItemType Directory -Force -Path $parent | Out-Null
+          New-Item -ItemType Directory -Force -Path $OfficeSshConfigDestDir | Out-Null
 
-            if (Test-Path (Join-Path $officeDir '.git')) {
-              git -C $officeDir pull --ff-only
-            } else {
-              git clone --depth 1 $env:DOTFILES_OFFICE_REPO $officeDir
-            }
+          if (Test-Path (Join-Path $OfficeCacheDir ".git")) {
+            git -C $OfficeCacheDir fetch --prune
+            git -C $OfficeCacheDir pull --ff-only
+          } else {
+            git clone --filter=blob:none --sparse $env:DOTFILES_OFFICE_REPO $OfficeCacheDir
+            git -C $OfficeCacheDir sparse-checkout set $OfficeSshConfigSrc
+          }
 
-            Write-Host \"Office dotfiles installed at: $officeDir\"
-          "
+          Copy-Item -Force `
+            -Path (Join-Path $OfficeCacheDir $OfficeSshConfigSrc) `
+            -Destination $OfficeSshConfigDest
+
+          Write-Host "Installed: $OfficeSshConfigDest"
         platforms: [windows]
 
   office:update:
-    desc: Update office-only dotfiles repository
+    desc: Update office-only SSH config
     cmds:
       - task: office:install
 
   office:status:
-    desc: Show office-only dotfiles repository status
+    desc: Show office-only repository status
     cmds:
       - cmd: |
-          office_dir="${DOTFILES_OFFICE_DIR:-$HOME/.local/share/dotfiles-office}"
+          OFFICE_CACHE_DIR="$HOME/.local/share/dotfiles-office"
 
-          if [ -d "$office_dir/.git" ]; then
-            git -C "$office_dir" status --short --branch
+          if [ -d "$OFFICE_CACHE_DIR/.git" ]; then
+            git -C "$OFFICE_CACHE_DIR" status --short --branch
           else
-            echo "Office dotfiles repository is not installed."
+            echo "Office repository is not installed."
           fi
         platforms: [linux, darwin]
 
       - cmd: |
-          powershell -NoProfile -ExecutionPolicy Bypass -Command "
-            $officeDir = if ($env:DOTFILES_OFFICE_DIR) {
-              $env:DOTFILES_OFFICE_DIR
-            } else {
-              Join-Path $env:USERPROFILE '.local\share\dotfiles-office'
-            }
+          $OfficeCacheDir = Join-Path $HOME ".local/share/dotfiles-office"
 
-            if (Test-Path (Join-Path $officeDir '.git')) {
-              git -C $officeDir status --short --branch
-            } else {
-              Write-Host 'Office dotfiles repository is not installed.'
-            }
-          "
+          if (Test-Path (Join-Path $OfficeCacheDir ".git")) {
+            git -C $OfficeCacheDir status --short --branch
+          } else {
+            Write-Host "Office repository is not installed."
+          }
+        platforms: [windows]
+
+  office:remove:
+    desc: Remove installed office-only SSH config and cached repository
+    cmds:
+      - cmd: |
+          rm -f "$HOME/.ssh/config.d/office.conf"
+          rm -rf "$HOME/.local/share/dotfiles-office"
+        platforms: [linux, darwin]
+
+      - cmd: |
+          $OfficeCacheDir = Join-Path $HOME ".local/share/dotfiles-office"
+          $OfficeSshConfig = Join-Path $HOME ".ssh/config.d/office.conf"
+
+          Remove-Item -Force $OfficeSshConfig -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $OfficeCacheDir -ErrorAction SilentlyContinue
+        platforms: [windows]
