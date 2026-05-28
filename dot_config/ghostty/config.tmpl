@@ -1,0 +1,17 @@
+# Managed by chezmoi
+
+font-family = JetBrainsMono Nerd Font
+font-size = 14
+theme = dark:GruvboxDark,light:GruvboxLight
+window-padding-x = 8
+window-padding-y = 8
+
+{{ if eq .machine_type "work" }}
+# Work machine specific settings
+confirm-close-surface = true
+{{ end }}
+
+{{ if eq .machine_type "personal" }}
+# Personal machine specific settings
+confirm-close-surface = false
+{{ end }}

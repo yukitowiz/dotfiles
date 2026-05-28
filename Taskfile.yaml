@@ -1,0 +1,108 @@
+version: "3"
+
+vars:
+  ROOT: "{{.TASKFILE_DIR}}"
+  CI_CONFIG: "{{.TASKFILE_DIR}}/tests/chezmoi-ci.toml"
+  TEST_DEST: "{{.TASKFILE_DIR}}/.tmp/chezmoi-dest"
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  diff:
+    desc: Show differences between chezmoi source and destination
+    cmds:
+      - chezmoi diff
+
+  dry-run:
+    desc: Run chezmoi apply in dry-run mode
+    cmds:
+      - chezmoi apply --dry-run --verbose
+
+  apply:
+    desc: Apply dotfiles
+    cmds:
+      - chezmoi apply
+
+  update:
+    desc: Pull and apply latest dotfiles
+    cmds:
+      - chezmoi update
+
+  status:
+    desc: Show chezmoi status
+    cmds:
+      - chezmoi status
+
+  doctor:
+    desc: Run diagnostics
+    cmds:
+      - chezmoi doctor
+      - chezmoi status
+
+  cd:
+    desc: Print chezmoi source directory
+    cmds:
+      - chezmoi source-path
+
+  prepare-test-dest:
+    desc: Prepare temporary destination directory for tests
+    cmds:
+      - cmd: mkdir -p "{{.TEST_DEST}}"
+        platforms: [linux, darwin]
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -Command "New-Item -ItemType Directory -Force -Path '{{.TEST_DEST}}' | Out-Null"
+        platforms: [windows]
+
+  clean:
+    desc: Remove temporary test files
+    cmds:
+      - cmd: rm -rf "{{.ROOT}}/.tmp"
+        platforms: [linux, darwin]
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Recurse -Force '{{.ROOT}}/.tmp' -ErrorAction SilentlyContinue"
+        platforms: [windows]
+
+  render:
+    desc: Render chezmoi templates with CI config
+    deps:
+      - prepare-test-dest
+    cmds:
+      - >
+        chezmoi
+        --source="{{.ROOT}}"
+        --destination="{{.TEST_DEST}}"
+        --config="{{.CI_CONFIG}}"
+        apply
+        --dry-run
+        --verbose
+
+  test:
+    desc: Run cross-platform tests
+    cmds:
+      - task: render
+      - task: lint-shell
+
+  lint-shell:
+    desc: Run shellcheck where available
+    cmds:
+      - cmd: |
+          if command -v shellcheck >/dev/null 2>&1; then
+            find "{{.ROOT}}" -type f \( -name "*.sh" -o -name "*.sh.tmpl" \) -print | while read -r file; do
+              echo "Checking $file"
+              shellcheck "$file" || exit 1
+            done
+          else
+            echo "shellcheck not found. Skipping."
+          fi
+        platforms: [linux, darwin]
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -Command "Write-Host 'Skipping shellcheck on Windows.'"
+        platforms: [windows]
+
+  inventory:
+    desc: List existing local dotfile candidates
+    cmds:
+      - cmd: sh "{{.ROOT}}/scripts/inventory.sh"
+        platforms: [linux, darwin]
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File "{{.ROOT}}/scripts/inventory.ps1"
+        platforms: [windows]

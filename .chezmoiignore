@@ -1,0 +1,14 @@
+README.md
+Taskfile.yml
+scripts/
+tests/
+.github/
+
+{{ if ne .chezmoi.os "darwin" }}
+dot_config/karabiner/
+{{ end }}
+
+{{ if eq .chezmoi.os "windows" }}
+dot_zshrc.tmpl
+dot_zprofile.tmpl
+{{ end }}

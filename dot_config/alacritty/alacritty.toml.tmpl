@@ -1,0 +1,20 @@
+# Managed by chezmoi
+
+[window]
+padding = { x = 8, y = 8 }
+opacity = 0.95
+
+[font]
+size = 14
+
+[font.normal]
+family = "JetBrainsMono Nerd Font"
+style = "Regular"
+
+[selection]
+save_to_clipboard = true
+
+{{ if eq .chezmoi.os "darwin" }}
+[window.option_as_alt]
+option = "Both"
+{{ end }}

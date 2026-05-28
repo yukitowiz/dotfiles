@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -eu
+
+if [ -x "$HOME/.local/bin/dotfiles-healthcheck" ]; then
+  "$HOME/.local/bin/dotfiles-healthcheck"
+else
+  echo "dotfiles-healthcheck is not installed yet."
+fi

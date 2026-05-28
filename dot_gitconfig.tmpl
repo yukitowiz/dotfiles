@@ -1,0 +1,34 @@
+[user]
+    name = {{ .name | quote }}
+    email = {{ .email | quote }}
+
+[init]
+    defaultBranch = main
+
+[pull]
+    rebase = false
+
+[push]
+    autoSetupRemote = true
+
+[core]
+    editor = nvim
+    excludesfile = ~/.config/git/ignore
+
+{{ if eq .chezmoi.os "darwin" }}
+[credential]
+    helper = osxkeychain
+{{ else if eq .chezmoi.os "linux" }}
+[credential]
+    helper = store
+{{ end }}
+
+{{ if eq .machine_type "work" }}
+[include]
+    path = ~/.gitconfig-work
+{{ end }}
+
+{{ if eq .machine_type "personal" }}
+[include]
+    path = ~/.gitconfig-personal
+{{ end }}

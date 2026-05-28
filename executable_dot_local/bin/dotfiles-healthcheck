@@ -1,0 +1,23 @@
+#!/bin/sh
+
+set -eu
+
+echo "Dotfiles healthcheck"
+
+if command -v chezmoi >/dev/null 2>&1; then
+  echo "chezmoi: $(chezmoi --version)"
+else
+  echo "chezmoi: not found"
+fi
+
+if command -v git >/dev/null 2>&1; then
+  echo "git: $(git --version)"
+else
+  echo "git: not found"
+fi
+
+if command -v zsh >/dev/null 2>&1; then
+  echo "zsh: found"
+else
+  echo "zsh: not found"
+fi
