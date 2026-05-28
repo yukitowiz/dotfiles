@@ -1,6 +1,10 @@
+# Managed by chezmoi
+
 [user]
     name = {{ .name | quote }}
-    email = {{ .email | quote }}
+{{ if eq .machine_type "personal" }}
+    email = {{ .personal_email | quote }}
+{{ end }}
 
 [init]
     defaultBranch = main
@@ -23,12 +27,9 @@
     helper = store
 {{ end }}
 
-{{ if eq .machine_type "work" }}
+{{ if eq .machine_type "office" }}
+# Office identity is intentionally not stored in the core dotfiles repository.
+# It is loaded from dotfiles-office.git.
 [include]
-    path = ~/.gitconfig-work
-{{ end }}
-
-{{ if eq .machine_type "personal" }}
-[include]
-    path = ~/.gitconfig-personal
+    path = ~/.local/share/dotfiles-office/git/gitconfig-office
 {{ end }}

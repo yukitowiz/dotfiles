@@ -1,37 +1,50 @@
 # Managed by chezmoi
+# Keep this file safe to commit.
 
-export EDITOR="nvim"
-export LANG="en_US.UTF-8"
-export PATH="$HOME/.local/bin:$PATH"
+[user]
+    name = {{ .name | quote }}
+    email = {{ .email | quote }}
+
+[init]
+    defaultBranch = main
+
+[pull]
+    rebase = false
+
+[push]
+    autoSetupRemote = true
+
+[core]
+    editor = nvim
+    excludesfile = ~/.config/git/ignore
 
 {{ if eq .chezmoi.os "darwin" }}
-if [ -d /opt/homebrew/bin ]; then
-  export PATH="/opt/homebrew/bin:$PATH"
-fi
+[credential]
+    helper = osxkeychain
+{{ else if eq .chezmoi.os "windows" }}
+[credential]
+    helper = manager
+{{ else if eq .chezmoi.os "linux" }}
+[credential]
+    helper = store
 {{ end }}
 
-{{ if eq .chezmoi.os "linux" }}
-if [ -d "$HOME/.cargo/bin" ]; then
-  export PATH="$HOME/.cargo/bin:$PATH"
-fi
-{{ end }}
-
-{{ if eq .machine_type "work" }}
-# Work-specific non-secret defaults can go here.
-export DOTFILES_MACHINE_TYPE="work"
-{{ else if eq .machine_type "personal" }}
-export DOTFILES_MACHINE_TYPE="personal"
-{{ else if eq .machine_type "server" }}
-export DOTFILES_MACHINE_TYPE="server"
-{{ end }}
-
-if command -v starship >/dev/null 2>&1; then
-  eval "$(starship init zsh)"
-fi
-
-# Local overrides.
-# This file is intentionally not managed by chezmoi.
-# Use it for secrets, tokens, corporate proxy, and machine-local paths.
-if [ -f "$HOME/.zshrc.local" ]; then
-  source "$HOME/.zshrc.local"
-fi
+# =============================================================================
+# Directory-based identity switching
+# =============================================================================
+#
+# Repositories under these directories can use different Git identities.
+#
+# Important:
+# - The trailing slash is intentional.
+# - includeIf paths are matched against repository paths.
+# - Included files should define [user] name/email.
+#
+# Example:
+#   ~/src/personal/foo/.git  -> ~/.gitconfig
+#   ~/src/work/bar/.git      -> ~/.local/share/dotfiles-office/git/gitconfig-office
+#
+# [includeIf "gitdir:~/src/personal/"]
+#    path = ~/.gitconfig
+# [includeIf "gitdir:~/src/office/"]
+#    path = ~/.local/share/dotfiles-office/git/gitconfig-office

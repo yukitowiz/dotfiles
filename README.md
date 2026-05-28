@@ -86,6 +86,114 @@ task --version
 
 ---
 
+## Git Identity Model
+
+The core dotfiles repository is managed by the personal GitHub account.
+
+Each machine has a `machine_type`:
+
+- `personal`
+- `office`
+
+For `personal` machines, the default Git email is stored in the core chezmoi
+configuration.
+
+For `office` machines, the office email is not stored in the core dotfiles
+repository. Instead, it is loaded from the office-only repository:
+
+```text
+~/.local/share/dotfiles-office/git/gitconfig-office
+```
+
+The core `~/.gitconfig` includes this file only when:
+
+```toml
+machine_type = "office"
+```
+
+This keeps office identity information out of the personal dotfiles repository.
+```
+
+```markdown
+## Office-only Repository
+
+Office-only settings are managed outside chezmoi by a separate Git repository.
+
+The office repository is cloned to:
+
+```text
+~/.local/share/dotfiles-office
+```
+
+### Recommended office repository
+
+The simplest office repository is a small repository containing only SSH config
+snippets:
+
+```text
+dotfiles-ssh-office/
+└── office.conf
+```
+
+Git does not truly clone a single file by itself. If only one file is needed,
+keep the office repository small and clone the repository to the target
+directory.
+
+Install or update it with Task:
+
+```sh
+task office:install
+```
+
+The repository URL should be provided by an environment variable so that the core
+dotfiles repository does not expose office organization names or private URLs.
+
+macOS / Linux:
+
+```sh
+export DOTFILES_OFFICE_REPO=git@githubw.com:<ORG>/dotfiles-ssh-office.git
+task office:install
+```
+
+Windows PowerShell:
+
+```powershell
+$env:DOTFILES_OFFICE_REPO = "git@githubw.com:<ORG>/dotfiles-ssh-office.git"
+task office:install
+```
+
+This keeps the core dotfiles repository safe to share while allowing office-only
+SSH settings to be synced separately.
+
+### Office SSH config example
+
+```sshconfig
+# Office-only SSH config.
+# This file is managed by the office SSH config repository.
+# Do not commit private keys, passwords, or tokens.
+
+Host office-bastion
+    HostName example.internal
+    User your-user-name
+    IdentityFile ~/.ssh/id_ed25519_work
+    IdentitiesOnly yes
+
+Host office-server
+    HostName server.internal
+    User your-user-name
+    ProxyJump office-bastion
+    IdentityFile ~/.ssh/id_ed25519_work
+    IdentitiesOnly yes
+```
+
+Private keys are still local-only:
+
+```text
+~/.ssh/id_ed25519_work
+```
+
+---
+
 ## Fresh Machine Setup
 
 Install chezmoi and Task first.
@@ -443,73 +551,6 @@ The core SSH config includes it through:
 
 ```sshconfig
 Include ~/.ssh/config.d/*/*.conf
-```
-
-### Recommended office repository
-
-The simplest office repository is a small repository containing only SSH config
-snippets:
-
-```text
-dotfiles-office-ssh/
-└── office.conf
-```
-
-Git does not truly clone a single file by itself. If only one file is needed,
-keep the office repository small and clone the repository to the target
-directory.
-
-Install or update it with Task:
-
-```sh
-task office:install
-```
-
-The repository URL should be provided by an environment variable so that the core
-dotfiles repository does not expose office organization names or private URLs.
-
-macOS / Linux:
-
-```sh
-export DOTFILES_OFFICE_REPO=git@github.com-work:<ORG>/dotfiles-office-ssh.git
-task office:install
-```
-
-Windows PowerShell:
-
-```powershell
-$env:DOTFILES_OFFICE_REPO = "git@github.com-work:<ORG>/dotfiles-office-ssh.git"
-task office:install
-```
-
-This keeps the core dotfiles repository safe to share while allowing office-only
-SSH settings to be synced separately.
-
-### Office SSH config example
-
-```sshconfig
-# Office-only SSH config.
-# This file is managed by the office SSH config repository.
-# Do not commit private keys, passwords, or tokens.
-
-Host office-bastion
-    HostName example.internal
-    User your-user-name
-    IdentityFile ~/.ssh/id_ed25519_work
-    IdentitiesOnly yes
-
-Host office-server
-    HostName server.internal
-    User your-user-name
-    ProxyJump office-bastion
-    IdentityFile ~/.ssh/id_ed25519_work
-    IdentitiesOnly yes
-```
-
-Private keys are still local-only:
-
-```text
-~/.ssh/id_ed25519_work
 ```
 
 ---

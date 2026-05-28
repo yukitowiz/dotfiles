@@ -108,78 +108,94 @@ tasks:
         platforms: [windows]
 
   office:install:
-    desc: Clone or update office-only SSH config repository
+    desc: Clone or update office-only dotfiles repository
     cmds:
       - cmd: |
           if [ -z "${DOTFILES_OFFICE_REPO:-}" ]; then
             echo "DOTFILES_OFFICE_REPO is not set."
+            echo ""
             echo "Example:"
-            echo "  export DOTFILES_OFFICE_REPO=git@github.com-work:<ORG>/dotfiles-office-ssh.git"
+            echo "  export DOTFILES_OFFICE_REPO=git@github.com-office:<ORG>/dotfiles-office.git"
             exit 1
           fi
 
-          mkdir -p "$HOME/.ssh/config.d"
+          office_dir="${DOTFILES_OFFICE_DIR:-$HOME/.local/share/dotfiles-office}"
 
-          if [ -d "$HOME/.ssh/config.d/office/.git" ]; then
-            git -C "$HOME/.ssh/config.d/office" pull --ff-only
+          mkdir -p "$(dirname "$office_dir")"
+
+          if [ -d "$office_dir/.git" ]; then
+            git -C "$office_dir" pull --ff-only
           else
-            git clone --depth 1 "$DOTFILES_OFFICE_REPO" "$HOME/.ssh/config.d/office"
+            git clone --depth 1 "$DOTFILES_OFFICE_REPO" "$office_dir"
           fi
 
-          chmod 700 "$HOME/.ssh" || true
-          chmod 700 "$HOME/.ssh/config.d" || true
-          chmod 700 "$HOME/.ssh/config.d/office" || true
-          find "$HOME/.ssh/config.d/office" -type f -name "*.conf" -exec chmod 600 {} \; || true
+          mkdir -p "$HOME/.ssh/controlmasters"
+
+          chmod 700 "$HOME/.ssh" 2>/dev/null || true
+          chmod 700 "$HOME/.ssh/controlmasters" 2>/dev/null || true
+          chmod -R go-rwx "$office_dir" 2>/dev/null || true
+
+          echo "Office dotfiles installed at: $office_dir"
         platforms: [linux, darwin]
 
       - cmd: |
-          if "%DOTFILES_OFFICE_REPO%"=="" (
-            echo DOTFILES_OFFICE_REPO is not set.
-            echo Example:
-            echo   set DOTFILES_OFFICE_REPO=git@github.com-work:^<ORG^>/dotfiles-office-ssh.git
-            exit /b 1
-          )
+          powershell -NoProfile -ExecutionPolicy Bypass -Command "
+            if (-not $env:DOTFILES_OFFICE_REPO) {
+              Write-Host 'DOTFILES_OFFICE_REPO is not set.'
+              Write-Host ''
+              Write-Host 'Example:'
+              Write-Host '  $env:DOTFILES_OFFICE_REPO = \"git@github.com-office:<ORG>/dotfiles-office.git\"'
+              exit 1
+            }
 
-          if not exist "%USERPROFILE%\.ssh\config.d" mkdir "%USERPROFILE%\.ssh\config.d"
+            $officeDir = if ($env:DOTFILES_OFFICE_DIR) {
+              $env:DOTFILES_OFFICE_DIR
+            } else {
+              Join-Path $env:USERPROFILE '.local\share\dotfiles-office'
+            }
 
-          if exist "%USERPROFILE%\.ssh\config.d\office\.git" (
-            git -C "%USERPROFILE%\.ssh\config.d\office" pull --ff-only
-          ) else (
-            git clone --depth 1 "%DOTFILES_OFFICE_REPO%" "%USERPROFILE%\.ssh\config.d\office"
-          )
+            $parent = Split-Path -Parent $officeDir
+            New-Item -ItemType Directory -Force -Path $parent | Out-Null
+
+            if (Test-Path (Join-Path $officeDir '.git')) {
+              git -C $officeDir pull --ff-only
+            } else {
+              git clone --depth 1 $env:DOTFILES_OFFICE_REPO $officeDir
+            }
+
+            Write-Host \"Office dotfiles installed at: $officeDir\"
+          "
         platforms: [windows]
 
   office:update:
-    desc: Update office-only SSH config repository
+    desc: Update office-only dotfiles repository
     cmds:
       - task: office:install
 
   office:status:
-    desc: Show office-only SSH config repository status
+    desc: Show office-only dotfiles repository status
     cmds:
       - cmd: |
-          if [ -d "$HOME/.ssh/config.d/office/.git" ]; then
-            git -C "$HOME/.ssh/config.d/office" status --short --branch
+          office_dir="${DOTFILES_OFFICE_DIR:-$HOME/.local/share/dotfiles-office}"
+
+          if [ -d "$office_dir/.git" ]; then
+            git -C "$office_dir" status --short --branch
           else
-            echo "Office SSH config repository is not installed."
+            echo "Office dotfiles repository is not installed."
           fi
         platforms: [linux, darwin]
 
       - cmd: |
-          if exist "%USERPROFILE%\.ssh\config.d\office\.git" (
-            git -C "%USERPROFILE%\.ssh\config.d\office" status --short --branch
-          ) else (
-            echo Office SSH config repository is not installed.
-          )
-        platforms: [windows]
+          powershell -NoProfile -ExecutionPolicy Bypass -Command "
+            $officeDir = if ($env:DOTFILES_OFFICE_DIR) {
+              $env:DOTFILES_OFFICE_DIR
+            } else {
+              Join-Path $env:USERPROFILE '.local\share\dotfiles-office'
+            }
 
-  office:remove:
-    desc: Remove office-only SSH config repository
-    cmds:
-      - cmd: |
-          rm -rf "$HOME/.ssh/config.d/office"
-        platforms: [linux, darwin]
-
-      - cmd: |
-          if exist "%USERPROFILE%\.ssh\config.d\office" rmdir /s /q "%USERPROFILE%\.ssh\config.d\office"
-        platforms: [windows]
+            if (Test-Path (Join-Path $officeDir '.git')) {
+              git -C $officeDir status --short --branch
+            } else {
+              Write-Host 'Office dotfiles repository is not installed.'
+            }
+          "

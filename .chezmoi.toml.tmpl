@@ -1,10 +1,11 @@
 {{- $name := promptStringOnce . "name" "Your full name" -}}
-{{- $email := promptStringOnce . "email" "Git email address" -}}
-{{- $machineType := promptStringOnce . "machine_type" "Machine type: personal/work/server" -}}
-{{- $installPackages := promptBoolOnce . "install_packages" "Install packages automatically?" false -}}
+{{- $personalEmail := promptStringOnce . "personal_email" "Personal Git email address" -}}
+{{- $machineType := promptStringOnce . "machine_type" "Machine type: personal or office" -}}
 
 [data]
 name = {{ $name | quote }}
-email = {{ $email | quote }}
+personal_email = {{ $personalEmail | quote }}
 machine_type = {{ $machineType | quote }}
-install_packages = {{ $installPackages }}
+
+# Package installation is intentionally disabled by default.
+install_packages = false
