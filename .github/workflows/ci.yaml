@@ -7,6 +7,9 @@ on:
       - master
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Test on ${{ matrix.os }}
@@ -29,21 +32,44 @@ jobs:
         with:
           go-version: stable
 
-      - name: Install chezmoi and Task
+      - name: Install Task
         shell: bash
         run: |
-          go install github.com/twpayne/chezmoi/v2@latest
           go install github.com/go-task/task/v3/cmd/task@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
+      - name: Install chezmoi on Linux and macOS
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/chezmoi" --version
+
+      - name: Install chezmoi on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bin = "$env:USERPROFILE\.local\bin"
+          New-Item -ItemType Directory -Force -Path $bin | Out-Null
+
+          $installer = Invoke-RestMethod -Uri "https://get.chezmoi.io/ps1"
+          Invoke-Expression "$installer -b `"$bin`""
+
+          Add-Content $env:GITHUB_PATH $bin
+          & "$bin\chezmoi.exe" --version
+
       - name: Install shellcheck on Ubuntu
         if: runner.os == 'Linux'
+        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck
 
       - name: Install shellcheck on macOS
         if: runner.os == 'macOS'
+        shell: bash
         run: |
           brew install shellcheck
 
