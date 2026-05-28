@@ -883,6 +883,28 @@ Machine-specific edges should be expressed through:
 The goal is not perfect uniformity.
 The goal is reproducible, understandable, and safely adaptable environments.
 
+### 7. Bootstrap Scripts Policy
+
+This repository intentionally does not run package installation or system setup
+automatically during the initial adoption phase.
+
+In particular, it does not include `run_once_*` scripts by default.
+
+This keeps `chezmoi apply` safe and predictable, especially on existing machines
+and across macOS, Linux, and Windows.
+
+If bootstrap scripts are added later, they must be:
+
+- explicit,
+- idempotent,
+- OS-aware,
+- safe to run multiple times,
+- free of secrets,
+- guarded by local data such as `install_packages = true`.
+
+For now, system setup should be performed through explicit Taskfile commands or
+manual steps.
+
 ---
 
 ## References
