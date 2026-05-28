@@ -79,6 +79,94 @@ task --version
 
 ---
 
+## Template-First Workflow
+
+Some files are managed as chezmoi templates.
+
+Examples:
+
+| Destination | Source |
+|---|---|
+| `~/.gitconfig` | `dot_gitconfig.tmpl` |
+| `~/.zshrc` | `dot_zshrc.tmpl` |
+| `~/.ssh/config` | `private_dot_ssh/config.tmpl` |
+| `~/.config/alacritty/alacritty.toml` | `dot_config/alacritty/alacritty.toml.tmpl` |
+| `~/.config/wezterm/wezterm.lua` | `dot_config/wezterm/wezterm.lua.tmpl` |
+
+For template-managed files, prefer editing the template source directly.
+
+Recommended workflow:
+
+```sh
+chezmoi cd
+$EDITOR private_dot_ssh/config.tmpl
+```
+
+Then inspect the rendered diff:
+
+```sh
+chezmoi diff ~/.ssh/config
+chezmoi apply --dry-run --verbose ~/.ssh/config
+```
+
+Apply only after reviewing the rendered output:
+
+```sh
+chezmoi apply ~/.ssh/config
+```
+
+Commit the source template:
+
+```sh
+git add private_dot_ssh/config.tmpl
+git commit -m "Update SSH config template"
+```
+
+### Do not blindly re-add template-managed files
+
+If a destination file is already managed as a template, running:
+
+```sh
+chezmoi add ~/.ssh/config
+```
+
+may show a warning like:
+
+```text
+adding .ssh/config would remove template attribute, continue?
+```
+
+In most cases, answer:
+
+```text
+n
+```
+
+This warning means that `chezmoi add` would replace the template source with a
+plain file and remove the `.tmpl` behavior.
+
+Instead, compare the current rendered template with the local file, then edit the
+template source manually.
+
+```sh
+chezmoi cat ~/.ssh/config > /tmp/ssh-config.chezmoi
+diff -u /tmp/ssh-config.chezmoi ~/.ssh/config || true
+```
+
+Or with VS Code:
+
+```sh
+code --diff /tmp/ssh-config.chezmoi ~/.ssh/config
+```
+
+Then update:
+
+```sh
+chezmoi cd
+$EDITOR private_dot_ssh/config.tmpl
+```
+
+---
 
 ## Fresh Machine Setup
 
@@ -209,35 +297,157 @@ passwords
 tokens
 ```
 
-To adopt an existing SSH config:
-
-```sh
-chezmoi add ~/.ssh/config
-chezmoi cd
-git diff
-```
-
-The source file will typically be:
-
-```text
-private_dot_ssh/config
-```
-
-If OS-specific or machine-specific differences are needed, convert it to:
+The recommended source file is:
 
 ```text
 private_dot_ssh/config.tmpl
 ```
 
-Recommended policy:
+This renders to:
 
-- Manage reusable SSH host entries.
-- Manage `IdentityFile` paths, but not private keys.
-- Move confidential work-only settings to `~/.ssh/config.local`.
-- Keep `~/.ssh/config.local` outside this repository.
-- Do not commit private hostnames if they are confidential.
+```text
+~/.ssh/config
+```
 
-Example:
+### SSH template update quick recipe
+
+```sh
+# 1. Do not overwrite the template.
+# If chezmoi asks whether to remove the template attribute, answer "n".
+
+# 2. Compare rendered template with the current local file.
+chezmoi cat ~/.ssh/config > /tmp/ssh-config.chezmoi
+diff -u /tmp/ssh-config.chezmoi ~/.ssh/config || true
+
+# 3. Edit the source template.
+chezmoi cd
+$EDITOR private_dot_ssh/config.tmpl
+
+# 4. Review rendered result.
+chezmoi diff ~/.ssh/config
+chezmoi apply --dry-run --verbose ~/.ssh/config
+
+# 5. Apply only SSH config.
+chezmoi apply ~/.ssh/config
+
+# 6. Validate SSH.
+ssh -G github.com > /tmp/ssh-github.resolved
+ssh -T git@github.com
+
+# 7. Commit.
+git add private_dot_ssh/config.tmpl
+git commit -m "Update SSH config template"
+```
+
+### First-time SSH config adoption
+
+If this repository does not yet have an SSH config template, you may add the
+existing file as a template:
+
+```sh
+chezmoi add --template ~/.ssh/config
+```
+
+Then review the generated source:
+
+```sh
+chezmoi cd
+git diff
+```
+
+The generated file should be:
+
+```text
+private_dot_ssh/config.tmpl
+```
+
+Before committing, remove or move out:
+
+- private keys,
+- passwords,
+- tokens,
+- confidential hostnames,
+- company-only proxy or bastion settings,
+- machine-local private paths.
+
+### Updating an existing SSH config template
+
+If `private_dot_ssh/config.tmpl` already exists, do not blindly run:
+
+```sh
+chezmoi add ~/.ssh/config
+```
+
+If chezmoi shows:
+
+```text
+adding .ssh/config would remove template attribute, continue?
+```
+
+answer:
+
+```text
+n
+```
+
+Then compare the rendered template with the current local file:
+
+```sh
+chezmoi cat ~/.ssh/config > /tmp/ssh-config.chezmoi
+diff -u /tmp/ssh-config.chezmoi ~/.ssh/config || true
+```
+
+Edit the template source:
+
+```sh
+chezmoi cd
+$EDITOR private_dot_ssh/config.tmpl
+```
+
+Review:
+
+```sh
+chezmoi diff ~/.ssh/config
+chezmoi apply --dry-run --verbose ~/.ssh/config
+```
+
+Apply only the SSH config if needed:
+
+```sh
+chezmoi apply ~/.ssh/config
+```
+
+### Classifying existing SSH settings
+
+When migrating existing SSH settings, classify them as follows:
+
+| Existing setting | Recommended location |
+|---|---|
+| Reusable public host entries | `private_dot_ssh/config.tmpl` |
+| Personal-only entries | `{{ if eq .machine_type "personal" }}` block |
+| Work-only non-confidential entries | `{{ if eq .machine_type "work" }}` block |
+| Server-only entries | `{{ if eq .machine_type "server" }}` block |
+| Confidential work hosts | `~/.ssh/config.local` |
+| Bastion/proxy settings | usually `~/.ssh/config.local` |
+| Private keys | not managed |
+| Passwords/tokens | not managed |
+
+Use an unmanaged local include for confidential or machine-local settings:
+
+```sshconfig
+Include ~/.ssh/config.local
+```
+
+Create the local file manually on each machine if needed:
+
+```sh
+touch ~/.ssh/config.local
+chmod 600 ~/.ssh/config.local
+```
+
+`~/.ssh/config.local` should not be committed.
+
+### Example SSH config template
 
 ```sshconfig
 # Managed by chezmoi
@@ -270,7 +480,8 @@ Host github.com
   User git
   IdentityFile ~/.ssh/id_ed25519_work
 
-# Put confidential work-only hosts and proxy/bastion settings here.
+# Local-only work SSH settings.
+# This file is intentionally not managed by chezmoi.
 Include ~/.ssh/config.local
 
 {{ end }}
@@ -285,17 +496,18 @@ Host github.com
 {{ end }}
 ```
 
-Review before applying:
+### Validate SSH behavior
+
+After applying SSH config, verify the resolved SSH configuration:
 
 ```sh
-task diff
-task dry-run
+ssh -G github.com > /tmp/ssh-github.resolved
 ```
 
-Apply only the SSH config if needed:
+Test GitHub SSH authentication:
 
 ```sh
-chezmoi apply ~/.ssh/config
+ssh -T git@github.com
 ```
 
 ---
@@ -314,15 +526,50 @@ task dry-run
 
 ### Phase 1: SSH config
 
+SSH config is prioritized because it is often required before other private
+repositories can be cloned.
+
+If this repository does not yet manage SSH config:
+
 ```sh
-chezmoi add ~/.ssh/config
+chezmoi add --template ~/.ssh/config
 ```
 
-Review carefully:
+If this repository already has:
+
+```text
+private_dot_ssh/config.tmpl
+```
+
+do not run a plain `chezmoi add ~/.ssh/config`.
+
+Instead:
 
 ```sh
+chezmoi cat ~/.ssh/config > /tmp/ssh-config.chezmoi
+diff -u /tmp/ssh-config.chezmoi ~/.ssh/config || true
 chezmoi cd
-git diff
+$EDITOR private_dot_ssh/config.tmpl
+```
+
+Review:
+
+```sh
+chezmoi diff ~/.ssh/config
+chezmoi apply --dry-run --verbose ~/.ssh/config
+```
+
+Apply only SSH config:
+
+```sh
+chezmoi apply ~/.ssh/config
+```
+
+Commit:
+
+```sh
+git add private_dot_ssh/config.tmpl
+git commit -m "Adopt SSH config template"
 ```
 
 ### Phase 2: Basic Git/editor files
@@ -678,45 +925,160 @@ Use a local-only file if needed:
 
 ## Editing Managed Files
 
-Edit source state directly:
+There are two different workflows depending on whether the file is managed as a
+plain file or as a template.
+
+---
+
+### Plain managed files
+
+Example:
+
+```text
+~/.config/nvim/init.lua
+```
+
+Source:
+
+```text
+dot_config/nvim/init.lua
+```
+
+You may edit the source directly:
 
 ```sh
 chezmoi cd
-$EDITOR .
+$EDITOR dot_config/nvim/init.lua
+```
+
+Then review and apply:
+
+```sh
+chezmoi diff ~/.config/nvim/init.lua
+chezmoi apply --dry-run --verbose ~/.config/nvim/init.lua
+chezmoi apply ~/.config/nvim/init.lua
+```
+
+If you edited the destination file directly, update the source state:
+
+```sh
+chezmoi re-add ~/.config/nvim/init.lua
 ```
 
 Then review:
 
 ```sh
-task diff
-task dry-run
+chezmoi cd
+git diff
+```
+
+---
+
+### Template-managed files
+
+Example:
+
+```text
+~/.ssh/config
+```
+
+Source:
+
+```text
+private_dot_ssh/config.tmpl
+```
+
+For template-managed files, prefer editing the source template directly:
+
+```sh
+chezmoi cd
+$EDITOR private_dot_ssh/config.tmpl
+```
+
+Then review the rendered destination:
+
+```sh
+chezmoi diff ~/.ssh/config
+chezmoi apply --dry-run --verbose ~/.ssh/config
 ```
 
 Apply:
 
 ```sh
-task apply
+chezmoi apply ~/.ssh/config
 ```
 
-Edit a managed file with chezmoi:
+Do not blindly run `chezmoi add` on a destination file that is already managed as
+a template.
+
+If you see:
+
+```text
+adding .ssh/config would remove template attribute, continue?
+```
+
+answer:
+
+```text
+n
+```
+
+Then compare the rendered template with the local destination:
 
 ```sh
-chezmoi edit ~/.zshrc
-chezmoi apply ~/.zshrc
+chezmoi cat ~/.ssh/config > /tmp/ssh-config.chezmoi
+diff -u /tmp/ssh-config.chezmoi ~/.ssh/config || true
 ```
 
-If you edited the real file directly, update chezmoi source state:
+After reviewing the difference, manually update the template source.
+
+---
+
+### When to use `chezmoi re-add`
+
+Use `chezmoi re-add` mainly for plain managed files.
+
+Good examples:
 
 ```sh
-chezmoi re-add ~/.zshrc
+chezmoi re-add ~/.config/nvim/init.lua
+chezmoi re-add ~/.config/git/ignore
 ```
 
-Review:
+Be careful with template-managed files because re-adding or adding them may remove
+the template attribute.
+
+For templates, prefer:
 
 ```sh
-git diff
-task diff
+chezmoi cd
+$EDITOR <source>.tmpl
 ```
+
+---
+
+### When to use `chezmoi merge`
+
+`chezmoi merge` can help when both the source state and destination file have
+changed.
+
+Example:
+
+```sh
+chezmoi merge ~/.zshrc
+```
+
+However, for template-managed files, merge is only a helper.
+
+It cannot decide:
+
+- which lines belong in an OS-specific block,
+- which settings belong in `work`, `personal`, or `server`,
+- which settings are confidential,
+- which settings should move to a local-only file.
+
+For files such as `~/.ssh/config`, prefer manual classification and template
+editing.
 
 ---
 
@@ -794,13 +1156,27 @@ Apply:
 task apply
 ```
 
-Add a new file:
+Add a new plain file
+
+For files that do not need OS or machine-specific rendering:
 
 ```sh
 chezmoi add ~/.config/example/config.toml
+```
+
+Add a new template file
+
+For files that need OS or machine-specific rendering:
+
+```sh
+chezmoi add --template ~/.config/example/config.toml
+```
+
+Then edit the generated `.tmpl` source:
+
+```sh
 chezmoi cd
-git add .
-git commit -m "Add example config"
+$EDITOR dot_config/example/config.toml.tmpl
 ```
 
 Update source after manual local changes:
@@ -883,7 +1259,32 @@ Machine-specific edges should be expressed through:
 The goal is not perfect uniformity.
 The goal is reproducible, understandable, and safely adaptable environments.
 
-### 7. Bootstrap Scripts Policy
+### 7. Template-first for files with machine differences
+
+Files with OS-specific, machine-specific, or role-specific differences should be
+managed as templates.
+
+Examples:
+
+- `~/.ssh/config`
+- `~/.gitconfig`
+- `~/.zshrc`
+- terminal emulator settings
+
+For these files, the source template is the canonical file.
+
+Do not blindly re-add rendered destination files if doing so would remove the
+template attribute.
+
+Instead:
+
+1. compare rendered output with the local destination,
+2. classify the difference,
+3. update the template source,
+4. review with dry-run,
+5. apply intentionally.
+
+### 8. Bootstrap Scripts Policy
 
 This repository intentionally does not run package installation or system setup
 automatically during the initial adoption phase.
