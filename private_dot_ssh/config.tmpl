@@ -1,43 +1,112 @@
 # Managed by chezmoi
 # Do not put private keys, passwords, tokens, or confidential host information here.
 
-Host *
-  AddKeysToAgent yes
-  ServerAliveInterval 60
-  ServerAliveCountMax 3
-  IdentitiesOnly yes
+# ~/.ssh/config
+# =============================================================================
+# OpenSSH client configuration.
+#
+# See https://www.ssh.com/ssh/config
+#
+#
+# Skip newer or system-specific unmatched options.
+# Keep this file safe to commit.
 
-{{ if eq .chezmoi.os "darwin" }}
-Host *
-  UseKeychain yes
-{{ end }}
-
-{{ if eq .machine_type "personal" }}
-
-Host github.com
-  HostName github.com
-  User git
-  IdentityFile ~/.ssh/id_ed25519_personal
-
-{{ end }}
-
-{{ if eq .machine_type "work" }}
-
-Host github.com
-  HostName github.com
-  User git
-  IdentityFile ~/.ssh/id_ed25519_work
+# Local / office-specific SSH snippets.
+# These files are not managed by the core dotfiles repository.
+Include ~/.ssh/config.d/*.conf
+Include ~/.ssh/config.d/*/*.conf
 
 # Put confidential work-only hosts and proxy/bastion settings here.
 Include ~/.ssh/config.local
 
-{{ end }}
-
-{{ if eq .machine_type "server" }}
-
 Host github.com
-  HostName github.com
-  User git
-  IdentityFile ~/.ssh/id_ed25519
+    HostName github.com
+    User git
+    Port 22
+    IdentityFile ~/.ssh/id_rsa
+    TCPKeepAlive yes
+    IdentitiesOnly yes
 
+Host githubw.com
+    HostName github.com
+    User git
+    Port 22
+    IdentityFile ~/.ssh/id_ecdsa_w
+    TCPKeepAlive yes
+    IdentitiesOnly yes
+
+Host hgc
+    HostName slogin.hgc.jp
+    User tony
+    # LocalForward 58888 localhost:58888
+    IdentityFile ~/.ssh/id_rsa
+    ForwardAgent yes
+    AddKeysToAgent yes
+    ForwardX11 yes
+    ServerAliveInterval 15
+
+Host hgc_vscode
+    Hostname sutil.hgc.jp
+    User tony
+    # LocalForward 58888 localhost:58888
+    IdentityFile ~/.ssh/id_rsa
+    ForwardAgent yes
+    AddKeysToAgent yes
+    ForwardX11 yes
+    ServerAliveInterval 15
+
+# H100 01-02
+Host pcg??
+    HostName %h
+    User tony
+    IdentityFile ~/.ssh/id_rsa
+    LocalForward 8888 pcg01:58888
+    #ProxyCommand ssh -CW %h:%p hgc
+    ProxyJump hgc_vscode
+    ForwardAgent yes
+    AddKeysToAgent yes
+    ForwardX11 yes
+    ServerAliveInterval 15
+
+# A100 01
+Host gcga??
+    HostName %h
+    User tony
+    IdentityFile ~/.ssh/id_rsa
+    LocalForward 8888 gcga01:58888
+    #ProxyCommand ssh -CW %h:%p hgc
+    ProxyJump hgc_vscode
+    ForwardAgent yes
+    AddKeysToAgent yes
+    ForwardX11 yes
+    ServerAliveInterval 15
+
+# L4 01-08
+Host hcgl??
+    HostName %h
+    User tony
+    IdentityFile ~/.ssh/id_rsa
+    LocalForward 8888 gcga01:58888
+    #ProxyCommand ssh -CW %h:%p hgc
+    ProxyJump hgc_vscode
+    ForwardAgent yes
+    AddKeysToAgent yes
+    ForwardX11 yes
+    ServerAliveInterval 15
+
+Host *
+{{ if ne .chezmoi.os "windows" }}
+    # Accelerate connections by reusing existing connections to the same host.
+    ControlMaster auto
+    ControlPath ~/.ssh/controlmasters/%C
+    ControlPersist 5m
 {{ end }}
+    # Add keys to the SSH agent.
+    AddKeysToAgent yes
+{{ if eq .chezmoi.os "darwin" }}
+    # Allow storing passphrases in the macOS keychain.
+    UseKeychain yes
+{{ end }}
+    # Keep the connection alive by sending periodic messages.
+    ServerAliveCountMax 6
+    ServerAliveInterval 15

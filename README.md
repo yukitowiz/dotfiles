@@ -12,6 +12,13 @@ Instead, this repository provides a safe, testable, and incremental workflow for
 bringing machines under chezmoi management while preserving useful local
 differences.
 
+> [!IMPORTANT]
+> For files already managed as templates, edit the source `.tmpl` file instead
+> of blindly running `chezmoi add`.
+>
+> If chezmoi warns that adding a file would remove the template attribute, stop
+> and update the template source manually.
+
 ---
 
 ## Quick Start
@@ -27,7 +34,7 @@ brew install chezmoi
 Linux:
 
 ```sh
-sh -c "$(curl -fsLS get.chezmoi.io)" -- -b $HOME/.local/bin
+sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin"
 ```
 
 Windows:
@@ -76,6 +83,111 @@ Verify:
 ```sh
 task --version
 ```
+
+---
+
+## Fresh Machine Setup
+
+Install chezmoi and Task first.
+
+If SSH is not configured yet, initialize with HTTPS first:
+
+```sh
+chezmoi init https://github.com/<USER>/dotfiles.git
+```
+
+If SSH is already configured:
+
+```sh
+chezmoi init git@github.com:<USER>/dotfiles.git
+```
+
+Move to the chezmoi source directory:
+
+```sh
+cd "$(chezmoi source-path)"
+```
+
+On Windows PowerShell:
+
+```powershell
+Set-Location (chezmoi source-path)
+```
+
+Inspect before applying:
+
+```sh
+task diff
+task dry-run
+```
+
+Apply only after reviewing the diff:
+
+```sh
+task apply
+```
+
+After SSH config is applied, you may switch the repository remote to SSH:
+
+```sh
+git remote set-url origin git@github.com:<USER>/dotfiles.git
+```
+
+---
+
+## Where to Run Task
+
+`Taskfile.yml` lives in the chezmoi source directory, not in `$HOME`.
+
+Check the source directory with:
+
+```sh
+chezmoi source-path
+```
+
+Move there before running Task:
+
+```sh
+cd "$(chezmoi source-path)"
+task diff
+task dry-run
+task apply
+```
+
+On Windows PowerShell:
+
+```powershell
+Set-Location (chezmoi source-path)
+task diff
+task dry-run
+task apply
+```
+
+Alternatively, run Task with an explicit directory:
+
+```sh
+task -d "$(chezmoi source-path)" diff
+```
+
+---
+
+## Existing Machine Setup
+
+For an existing customized machine, do not apply immediately.
+
+First inspect the current state:
+
+```sh
+task inventory
+task diff
+task dry-run
+```
+
+Then adopt files gradually.
+
+The default rule is:
+
+> Inspect first. Add one file at a time. Review before applying.
 
 ---
 
@@ -146,7 +258,7 @@ This warning means that `chezmoi add` would replace the template source with a
 plain file and remove the `.tmpl` behavior.
 
 Instead, compare the current rendered template with the local file, then edit the
-template source manually.
+template source manually:
 
 ```sh
 chezmoi cat ~/.ssh/config > /tmp/ssh-config.chezmoi
@@ -159,119 +271,12 @@ Or with VS Code:
 code --diff /tmp/ssh-config.chezmoi ~/.ssh/config
 ```
 
-Then update:
+Then update the source template:
 
 ```sh
 chezmoi cd
 $EDITOR private_dot_ssh/config.tmpl
 ```
-
----
-
-## Fresh Machine Setup
-
-Install chezmoi and Task first.
-
-Then initialize this repository:
-
-```sh
-chezmoi init <GITHUB_USER_OR_REPOSITORY>
-```
-
-Example:
-
-```sh
-chezmoi init git@github.com:<USER>/dotfiles.git
-```
-
-Move to the chezmoi source directory:
-
-```sh
-cd "$(chezmoi source-path)"
-```
-
-On Windows PowerShell:
-
-```powershell
-Set-Location (chezmoi source-path)
-```
-
-Inspect before applying:
-
-```sh
-task diff
-task dry-run
-```
-
-Apply only after reviewing the diff:
-
-```sh
-task apply
-```
-
----
-
-## Where to Run Task
-
-`Taskfile.yml` lives in the chezmoi source directory, not in `$HOME`.
-
-After running:
-
-```sh
-chezmoi init <GITHUB_USER_OR_REPOSITORY>
-```
-
-the repository is cloned into the chezmoi source directory.
-
-Check the path with:
-
-```sh
-chezmoi source-path
-```
-
-Move there before running Task:
-
-```sh
-cd "$(chezmoi source-path)"
-task diff
-task dry-run
-task apply
-```
-
-On Windows PowerShell:
-
-```powershell
-Set-Location (chezmoi source-path)
-task diff
-task dry-run
-task apply
-```
-
-Alternatively, run Task with an explicit directory:
-
-```sh
-task -d "$(chezmoi source-path)" diff
-```
-
----
-
-## Existing Machine Setup
-
-For an existing customized machine, do not apply immediately.
-
-First inspect the current state:
-
-```sh
-task inventory
-task diff
-task dry-run
-```
-
-Then adopt files gradually.
-
-The default rule is:
-
-> Inspect first. Add one file at a time. Review before applying.
 
 ---
 
@@ -309,7 +314,207 @@ This renders to:
 ~/.ssh/config
 ```
 
-### SSH template update quick recipe
+### SSH privacy model
+
+`private_dot_ssh` in chezmoi means that the destination file should have private
+file permissions. It does not mean that the file is encrypted in the repository.
+
+Therefore, anything committed to:
+
+```text
+private_dot_ssh/config.tmpl
+```
+
+must be safe to exist in this repository.
+
+This repository should only contain reusable SSH core settings, such as:
+
+- generic `Host *` defaults,
+- public service aliases,
+- GitHub account switching aliases,
+- `IdentityFile` paths,
+- local include points.
+
+This repository should not contain:
+
+- SSH private keys,
+- passwords,
+- tokens,
+- confidential company hostnames,
+- bastion hosts,
+- proxy settings,
+- customer names,
+- machine-local private paths.
+
+---
+
+## SSH Config Layout
+
+The core SSH config should provide include points for local or office-specific
+settings.
+
+Important rules:
+
+1. `Include` directives should be placed before the first `Host` block.
+2. Explicit host entries should come before `Host *`.
+3. `Host *` should generally be placed at the end.
+4. Do not use obsolete options such as `UseRoaming`.
+
+Example:
+
+```sshconfig
+# -*-mode:ssh-config-*- vim:ft=sshconfig
+
+# Managed by chezmoi.
+# Keep this file safe to commit.
+# Do not put private keys, passwords, tokens, or confidential host information here.
+
+# Local / office-specific SSH snippets.
+# These files are not managed by the core dotfiles repository.
+Include ~/.ssh/config.d/*.conf
+Include ~/.ssh/config.d/*/*.conf
+Include ~/.ssh/config.local
+
+Host github.com
+    HostName github.com
+    User git
+    Port 22
+    IdentityFile ~/.ssh/id_rsa
+    IdentitiesOnly yes
+
+Host githubw.com
+    HostName github.com
+    User git
+    Port 22
+    IdentityFile ~/.ssh/id_ecdsa_w
+    IdentitiesOnly yes
+
+Host *
+    # Accelerate connections by reusing existing connections to the same host.
+    ControlMaster auto
+    ControlPath ~/.ssh/controlmasters/%C
+    ControlPersist 5m
+
+    # Add keys to the SSH agent.
+    AddKeysToAgent yes
+
+{{ if eq .chezmoi.os "darwin" }}
+    # Allow storing passphrases in the macOS keychain.
+    UseKeychain yes
+{{ end }}
+
+    # Keep connections alive by sending periodic messages.
+    ServerAliveCountMax 6
+    ServerAliveInterval 15
+
+    TCPKeepAlive yes
+    IdentitiesOnly yes
+```
+
+Create the ControlMaster directory if needed:
+
+```sh
+mkdir -p ~/.ssh/controlmasters
+chmod 700 ~/.ssh
+chmod 700 ~/.ssh/controlmasters
+```
+
+---
+
+## Office-only SSH Config
+
+The core dotfiles repository does not contain office-confidential SSH host
+entries.
+
+Office-only SSH settings should be stored in a separate Git repository and cloned
+into:
+
+```text
+~/.ssh/config.d/office/
+```
+
+For example:
+
+```text
+~/.ssh/config.d/office/office.conf
+```
+
+The core SSH config includes it through:
+
+```sshconfig
+Include ~/.ssh/config.d/*/*.conf
+```
+
+### Recommended office repository
+
+The simplest office repository is a small repository containing only SSH config
+snippets:
+
+```text
+dotfiles-office-ssh/
+└── office.conf
+```
+
+Git does not truly clone a single file by itself. If only one file is needed,
+keep the office repository small and clone the repository to the target
+directory.
+
+Install or update it with Task:
+
+```sh
+task office:install
+```
+
+The repository URL should be provided by an environment variable so that the core
+dotfiles repository does not expose office organization names or private URLs.
+
+macOS / Linux:
+
+```sh
+export DOTFILES_OFFICE_REPO=git@github.com-work:<ORG>/dotfiles-office-ssh.git
+task office:install
+```
+
+Windows PowerShell:
+
+```powershell
+$env:DOTFILES_OFFICE_REPO = "git@github.com-work:<ORG>/dotfiles-office-ssh.git"
+task office:install
+```
+
+This keeps the core dotfiles repository safe to share while allowing office-only
+SSH settings to be synced separately.
+
+### Office SSH config example
+
+```sshconfig
+# Office-only SSH config.
+# This file is managed by the office SSH config repository.
+# Do not commit private keys, passwords, or tokens.
+
+Host office-bastion
+    HostName example.internal
+    User your-user-name
+    IdentityFile ~/.ssh/id_ed25519_work
+    IdentitiesOnly yes
+
+Host office-server
+    HostName server.internal
+    User your-user-name
+    ProxyJump office-bastion
+    IdentityFile ~/.ssh/id_ed25519_work
+    IdentitiesOnly yes
+```
+
+Private keys are still local-only:
+
+```text
+~/.ssh/id_ed25519_work
+```
+
+---
+
+## SSH Template Update Quick Recipe
 
 ```sh
 # 1. Do not overwrite the template.
@@ -339,7 +544,9 @@ git add private_dot_ssh/config.tmpl
 git commit -m "Update SSH config template"
 ```
 
-### First-time SSH config adoption
+---
+
+## First-time SSH Config Adoption
 
 If this repository does not yet have an SSH config template, you may add the
 existing file as a template:
@@ -369,146 +576,6 @@ Before committing, remove or move out:
 - confidential hostnames,
 - company-only proxy or bastion settings,
 - machine-local private paths.
-
-### Updating an existing SSH config template
-
-If `private_dot_ssh/config.tmpl` already exists, do not blindly run:
-
-```sh
-chezmoi add ~/.ssh/config
-```
-
-If chezmoi shows:
-
-```text
-adding .ssh/config would remove template attribute, continue?
-```
-
-answer:
-
-```text
-n
-```
-
-Then compare the rendered template with the current local file:
-
-```sh
-chezmoi cat ~/.ssh/config > /tmp/ssh-config.chezmoi
-diff -u /tmp/ssh-config.chezmoi ~/.ssh/config || true
-```
-
-Edit the template source:
-
-```sh
-chezmoi cd
-$EDITOR private_dot_ssh/config.tmpl
-```
-
-Review:
-
-```sh
-chezmoi diff ~/.ssh/config
-chezmoi apply --dry-run --verbose ~/.ssh/config
-```
-
-Apply only the SSH config if needed:
-
-```sh
-chezmoi apply ~/.ssh/config
-```
-
-### Classifying existing SSH settings
-
-When migrating existing SSH settings, classify them as follows:
-
-| Existing setting | Recommended location |
-|---|---|
-| Reusable public host entries | `private_dot_ssh/config.tmpl` |
-| Personal-only entries | `{{ if eq .machine_type "personal" }}` block |
-| Work-only non-confidential entries | `{{ if eq .machine_type "work" }}` block |
-| Server-only entries | `{{ if eq .machine_type "server" }}` block |
-| Confidential work hosts | `~/.ssh/config.local` |
-| Bastion/proxy settings | usually `~/.ssh/config.local` |
-| Private keys | not managed |
-| Passwords/tokens | not managed |
-
-Use an unmanaged local include for confidential or machine-local settings:
-
-```sshconfig
-Include ~/.ssh/config.local
-```
-
-Create the local file manually on each machine if needed:
-
-```sh
-touch ~/.ssh/config.local
-chmod 600 ~/.ssh/config.local
-```
-
-`~/.ssh/config.local` should not be committed.
-
-### Example SSH config template
-
-```sshconfig
-# Managed by chezmoi
-# Do not put private keys, passwords, tokens, or confidential host information here.
-
-Host *
-  AddKeysToAgent yes
-  ServerAliveInterval 60
-  ServerAliveCountMax 3
-  IdentitiesOnly yes
-
-{{ if eq .chezmoi.os "darwin" }}
-Host *
-  UseKeychain yes
-{{ end }}
-
-{{ if eq .machine_type "personal" }}
-
-Host github.com
-  HostName github.com
-  User git
-  IdentityFile ~/.ssh/id_ed25519_personal
-
-{{ end }}
-
-{{ if eq .machine_type "work" }}
-
-Host github.com
-  HostName github.com
-  User git
-  IdentityFile ~/.ssh/id_ed25519_work
-
-# Local-only work SSH settings.
-# This file is intentionally not managed by chezmoi.
-Include ~/.ssh/config.local
-
-{{ end }}
-
-{{ if eq .machine_type "server" }}
-
-Host github.com
-  HostName github.com
-  User git
-  IdentityFile ~/.ssh/id_ed25519
-
-{{ end }}
-```
-
-### Validate SSH behavior
-
-After applying SSH config, verify the resolved SSH configuration:
-
-```sh
-ssh -G github.com > /tmp/ssh-github.resolved
-```
-
-Test GitHub SSH authentication:
-
-```sh
-ssh -T git@github.com
-```
 
 ---
 
@@ -660,7 +727,7 @@ Commit small logical changes:
 
 ```sh
 git add .
-git commit -m "Adopt SSH config"
+git commit -m "Adopt local dotfiles incrementally"
 ```
 
 ---
@@ -680,6 +747,9 @@ task doctor
 task render
 task test
 task inventory
+task office:install
+task office:update
+task office:status
 ```
 
 Command meanings:
@@ -695,6 +765,8 @@ Command meanings:
 | `task doctor` | Run diagnostics |
 | `task render` | Render templates using test config |
 | `task test` | Run local test workflow |
+| `task office:install` | Clone or update office-only SSH config repository |
+| `task office:status` | Show office-only SSH config repository status |
 
 ---
 
@@ -721,11 +793,15 @@ Command meanings:
 │   ├── wezterm/
 │   │   └── wezterm.lua.tmpl
 │   ├── karabiner/
-│   │   └── karabiner.json.tmpl │   └── User/
+│   │   └── karabiner.json.tmpl
+│   ├── Code/
+│   │   └── User/
 │   │       └── settings.json.tmpl
 │   └── starship.toml
 ├── private_dot_ssh/
-│   └── config.tmpl
+│   ├── config.tmpl
+│   └── controlmasters/
+│       └── .keep
 ├── executable_dot_local/
 │   └── bin/
 │       └── dotfiles-healthcheck
@@ -746,6 +822,7 @@ Common chezmoi naming rules:
 | `dot_zshrc` | `~/.zshrc` |
 | `dot_config/git/ignore` | `~/.config/git/ignore` |
 | `private_dot_ssh/config.tmpl` | `~/.ssh/config`, rendered from template |
+| `private_dot_ssh/controlmasters/.keep` | `~/.ssh/controlmasters/.keep` |
 | `executable_dot_local/bin/foo` | `~/.local/bin/foo` |
 | `dot_gitconfig.tmpl` | `~/.gitconfig`, rendered from template |
 
@@ -828,6 +905,8 @@ Use one of the following instead:
 
 - `~/.zshrc.local`
 - `~/.ssh/config.local`
+- `~/.ssh/config.d/*.conf`
+- `~/.ssh/config.d/*/*.conf`
 - environment variables
 - password managers
 - 1Password CLI
@@ -928,8 +1007,6 @@ Use a local-only file if needed:
 There are two different workflows depending on whether the file is managed as a
 plain file or as a template.
 
----
-
 ### Plain managed files
 
 Example:
@@ -944,7 +1021,7 @@ Source:
 dot_config/nvim/init.lua
 ```
 
-You may edit the source directly:
+Edit the source directly:
 
 ```sh
 chezmoi cd
@@ -971,8 +1048,6 @@ Then review:
 chezmoi cd
 git diff
 ```
-
----
 
 ### Template-managed files
 
@@ -1032,8 +1107,6 @@ diff -u /tmp/ssh-config.chezmoi ~/.ssh/config || true
 
 After reviewing the difference, manually update the template source.
 
----
-
 ### When to use `chezmoi re-add`
 
 Use `chezmoi re-add` mainly for plain managed files.
@@ -1054,8 +1127,6 @@ For templates, prefer:
 chezmoi cd
 $EDITOR <source>.tmpl
 ```
-
----
 
 ### When to use `chezmoi merge`
 
@@ -1129,6 +1200,14 @@ CI should run on:
 - macOS
 - Windows
 
+Do not install chezmoi in CI with:
+
+```sh
+go install github.com/twpayne/chezmoi/v2@latest
+```
+
+Use the official chezmoi installer instead.
+
 The goal of CI is not to perfectly reproduce every personal machine.
 The goal is to catch obvious template errors, invalid scripts, and unsafe
 assumptions.
@@ -1156,7 +1235,7 @@ Apply:
 task apply
 ```
 
-Add a new plain file
+### Add a new plain file
 
 For files that do not need OS or machine-specific rendering:
 
@@ -1164,7 +1243,7 @@ For files that do not need OS or machine-specific rendering:
 chezmoi add ~/.config/example/config.toml
 ```
 
-Add a new template file
+### Add a new template file
 
 For files that need OS or machine-specific rendering:
 
@@ -1179,7 +1258,9 @@ chezmoi cd
 $EDITOR dot_config/example/config.toml.tmpl
 ```
 
-Update source after manual local changes:
+### Update source after manual local changes
+
+For plain managed files:
 
 ```sh
 chezmoi re-add ~/.config/example/config.toml
@@ -1187,6 +1268,8 @@ chezmoi cd
 git diff
 git commit -am "Update example config"
 ```
+
+For template-managed files, edit the `.tmpl` source directly instead.
 
 ---
 
@@ -1229,7 +1312,8 @@ chezmoi templates are used for OS-specific and machine-specific configuration.
 Secrets do not belong in dotfiles.
 
 Private keys, tokens, passwords, company-confidential settings, and machine-local
-private paths should stay in local-only files or password managers.
+private paths should stay in local-only files, office-only repositories, or
+password managers.
 
 ### 5. Prefer readable native config
 
@@ -1254,7 +1338,8 @@ Machine-specific edges should be expressed through:
 - OS conditions,
 - local-only files,
 - password managers,
-- small template boundaries.
+- small template boundaries,
+- office-only repositories when needed.
 
 The goal is not perfect uniformity.
 The goal is reproducible, understandable, and safely adaptable environments.
@@ -1284,7 +1369,22 @@ Instead:
 4. review with dry-run,
 5. apply intentionally.
 
-### 8. Bootstrap Scripts Policy
+### 8. Keep office-specific settings outside the core repository
+
+If a setting is office-confidential, do not commit it to the core dotfiles
+repository.
+
+For the current setup, office-specific SSH settings are stored in a separate Git
+repository and cloned into:
+
+```text
+~/.ssh/config.d/office/
+```
+
+This avoids the complexity of multi-source chezmoi while keeping confidential
+settings out of the core repository.
+
+### 9. Bootstrap scripts policy
 
 This repository intentionally does not run package installation or system setup
 automatically during the initial adoption phase.
