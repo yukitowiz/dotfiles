@@ -1,4 +1,14 @@
-# Managed by chezmoi
+# -*-mode:gitconfig-*- vim:ft=gitconfig
+
+# Managed by chezmoi.
+# Keep this file safe to commit.
+# Do not put tokens, passwords, temporary paths, or machine-local credential helpers here.
+
+# ~/.gitconfig
+# =============================================================================
+# User-specific Git configuration file.
+#
+# See https://git-scm.com/docs/git-config
 
 [user]
     name = {{ .name | quote }}
@@ -15,9 +25,74 @@
 [push]
     autoSetupRemote = true
 
+[apply]
+    # Detect whitespace errors when applying a patch.
+    whitespace = fix
+
+[commit]
+    # Specify template file for new commit messages.
+    template = ~/.gitmessage.txt
+
 [core]
-    editor = nvim
-    excludesfile = ~/.config/git/ignore
+{{ if eq .chezmoi.os "windows" }}
+    # On Windows, avoid forcing Unix-style line endings globally.
+    autocrlf = false
+{{ else }}
+    # Disable line endings output conversion.
+    autocrlf = input
+{{ end }}
+
+    # Set comment character to something that allows mentioning issue numbers.
+    commentChar = ";"
+
+    # Store global exclusions into a custom file.
+    excludesfile = ~/.gitignore_global
+
+{{ if eq .chezmoi.os "darwin" }}
+    # Make `git rebase` safer on macOS.
+    # See http://www.git-tower.com/blog/make-git-rebase-safe-on-osx/
+    trustctime = false
+{{ end }}
+
+    # Speed up commands involving untracked files such as `git status`.
+    # See https://git-scm.com/docs/git-update-index#_untracked_cache
+    untrackedCache = true
+
+[diff]
+    # List submodule commits in the range.
+    submodule = log
+
+[fetch]
+    # Remove any remote-tracking references that no longer exist on the remote.
+    prune = true
+
+[filter "lfs"]
+    # Git LFS support.
+    clean = git-lfs clean -- %f
+    smudge = git-lfs smudge -- %f
+    process = git-lfs filter-process
+    required = true
+
+[help]
+    # Correct and execute mistyped commands.
+    # Consider setting this to 0 if automatic correction feels risky.
+    autocorrect = 1
+
+[merge]
+    # Include summaries of merged commits in newly created merge commit messages.
+    log = true
+
+[mergetool]
+    # Avoid saving an `.orig` backup file after a merge.
+    keepBackup = false
+
+[rebase]
+    # Create a temporary stash entry before the operation begins.
+    autostash = true
+
+[status]
+    # Enable submodule summary of commits.
+    submoduleSummary = true
 
 {{ if eq .chezmoi.os "darwin" }}
 [credential]
@@ -25,6 +100,9 @@
 {{ else if eq .chezmoi.os "linux" }}
 [credential]
     helper = store
+{{ else if eq .chezmoi.os "windows" }}
+[credential]
+    helper = manager
 {{ end }}
 
 {{ if eq .machine_type "office" }}
@@ -33,3 +111,16 @@
 [include]
     path = ~/.local/share/dotfiles-office/git/gitconfig-office
 {{ end }}
+[include]
+    # Include aliases.
+    path = ~/.gitconfig_aliases
+
+    # Include extra local configuration.
+    # This file is intentionally not managed by the core dotfiles repository.
+    path = ~/.gitconfig_local
+
+[includeIf "gitdir:~/src/personal/"]
+    path = ~/.gitconfig-personal
+
+[includeIf "gitdir:~/src/work/"]
+    path = ~/.gitconfig-work
