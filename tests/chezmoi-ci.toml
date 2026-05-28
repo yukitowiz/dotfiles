@@ -1,10 +1,5 @@
-{{- $name := promptStringOnce . "name" "Your full name" -}}
-{{- $email := promptStringOnce . "email" "Git email address" -}}
-{{- $machineType := promptStringOnce . "machine_type" "Machine type: personal/work/server" -}}
-{{- $installPackages := promptBoolOnce . "install_packages" "Install packages automatically?" false -}}
-
 [data]
-name = {{ $name | quote }}
-email = {{ $email | quote }}
-machine_type = {{ $machineType | quote }}
-install_packages = {{ $installPackages }}
+name = "CI User"
+email = "ci@example.com"
+machine_type = "ci"
+install_packages = false
